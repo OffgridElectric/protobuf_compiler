@@ -37,8 +37,8 @@ defmodule Mix.Tasks.Compile.Proto do
   use Mix.Task.Compiler
 
   @doc false
-  def run(_args) do
-    opts = get_options()
+  def run(args) do
+    opts = get_options(args)
 
     errors = []
 
@@ -60,8 +60,8 @@ defmodule Mix.Tasks.Compile.Proto do
   end
 
   @doc false
-  def clean do
-    opts = get_options()
+  def clean(args) do
+    opts = get_options(args)
 
     opts.target
     |> Path.join("*.pb.ex")
@@ -79,9 +79,9 @@ defmodule Mix.Tasks.Compile.Proto do
   ###
   ### Priv
   ###
-  defp get_options do
+  defp get_options(args) do
     project = Mix.Project.config()
-    opts = struct!(Options, project[:protoc_opts] || [])
+    opts = struct!(Options, project[:protoc_opts] || args)
     %{opts | includes: [@includes | List.wrap(opts.includes)]}
   end
 
@@ -123,7 +123,7 @@ defmodule Mix.Tasks.Compile.Proto do
       |> Kernel.++(["--elixir_out=" <> elixir_out_opts])
       |> Kernel.++([src])
 
-    cmd = "protoc " <> Enum.join(args, " ") |> IO.inspect(label: "cmd")
+    cmd = "protoc " <> Enum.join(args, " ")
 
     if Mix.shell().cmd(cmd) == 0 do
       errors
