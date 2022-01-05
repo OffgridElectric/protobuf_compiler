@@ -40,20 +40,18 @@ defmodule Mix.Tasks.Compile.Proto do
   def run(args) do
     opts = get_options(args)
 
-    errors = []
+    s = %{errors: []}
 
-    errors =
-      opts.sources
-      |> Enum.reduce(errors, &check_src(&2, &1, "proto"))
-      |> check_exec("protoc")
-      |> check_exec("protoc-gen-elixir")
-      |> do_compile(opts.sources, opts)
-
-    case errors do
-      [] ->
+    opts.sources
+    |> Enum.reduce(s, &check_src(&2, &1, "proto"))
+    |> check_exec("protoc")
+    |> check_exec("protoc-gen-elixir")
+    |> do_compile(opts.sources, opts)
+    |> case do
+      %{errors: []} ->
         :ok
 
-      _ ->
+      %{errors: errors} ->
         Enum.each(errors, &error/1)
         {:error, errors}
     end
@@ -85,22 +83,22 @@ defmodule Mix.Tasks.Compile.Proto do
     %{opts | includes: [@includes | List.wrap(opts.includes)]}
   end
 
-  defp do_compile([] = errors, srcs, opts) do
+  defp do_compile(%{errors: []} = s, srcs, opts) do
     :ok = File.mkdir_p(opts.target)
 
     targets = Enum.reduce(srcs, [], &(targets(&1, opts) ++ &2))
 
     if Mix.Utils.stale?(srcs, targets) do
       srcs
-      |> Enum.reduce([], &do_protoc(&2, &1, opts))
+      |> Enum.reduce(s, &do_protoc(&2, &1, opts))
     else
-      errors
+      s
     end
   end
 
-  defp do_compile(errors, _srcs, _opts), do: errors
+  defp do_compile(s, _srcs, _opts), do: s
 
-  defp do_protoc(errors, src, opts) do
+  defp do_protoc(s, src, opts) do
     _ = info(src)
 
     elixir_out_opts =
@@ -126,9 +124,9 @@ defmodule Mix.Tasks.Compile.Proto do
     cmd = "protoc " <> Enum.join(args, " ")
 
     if Mix.shell().cmd(cmd) == 0 do
-      errors
+      s
     else
-      errors ++ ["Compilation failed"]
+      %{s | errors: s.errors ++ ["Compilation failed"]}
     end
   end
 
@@ -150,30 +148,27 @@ defmodule Mix.Tasks.Compile.Proto do
     Mix.shell().info([:bright, @task_name, :normal, " ", :red, msg])
   end
 
-  defp check_exec(errors, exec) do
-    errors =
-      if System.find_executable(exec) do
-        errors
-      else
-        ["Missing executable: #{exec}" | errors]
-      end
-
-    errors
-  end
-
-  defp check_src(errors, src, ext) do
-    if File.exists?(src) do
-      check_ext(errors, src, ext)
+  defp check_exec(s, exec) do
+    if System.find_executable(exec) do
+      s
     else
-      ["Missing file: #{src}" | errors]
+      %{s | errors: ["Missing executable: #{exec}" | s.errors]}
     end
   end
 
-  defp check_ext(errors, src, ext) do
-    if String.ends_with?(src, ".#{ext}") do
-      errors
+  defp check_src(s, src, ext) do
+    if File.exists?(src) do
+      check_ext(s, src, ext)
     else
-      ["Source file #{src} doesn't match '*.#{ext}'" | errors]
+      %{s | errors: ["Missing file: #{src}" | s.errors]}
+    end
+  end
+
+  defp check_ext(s, src, ext) do
+    if String.ends_with?(src, ".#{ext}") do
+      s
+    else
+      %{s | errors: ["Source file #{src} doesn't match '*.#{ext}'" | s.errors]}
     end
   end
 end
