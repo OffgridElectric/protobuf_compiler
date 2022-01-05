@@ -28,30 +28,41 @@ defmodule Mix.Tasks.Compile.Proto do
               gen_descriptors: false
   end
 
+  defmodule State do
+    @moduledoc false
+
+    defstruct errors: [], env: []
+  end
+
   @shortdoc "Compiles .proto file into elixir files"
 
   @task_name "compile.proto"
 
   @includes Path.expand("../../../src", __DIR__)
+  @plugin "protoc-gen-elixir"
 
   use Mix.Task.Compiler
 
   @doc false
   def run(args) do
+    Application.ensure_loaded(:compile_proto)
+
     opts = get_options(args)
 
-    s = %{errors: []}
+    s = %State{}
 
     opts.sources
     |> Enum.reduce(s, &check_src(&2, &1, "proto"))
+    |> set_env()
     |> check_exec("protoc")
-    |> check_exec("protoc-gen-elixir")
+    |> check_exec(@plugin)
+    |> check_plugin_version(Application.fetch_env!(:compile_proto, :plugin_version))
     |> do_compile(opts.sources, opts)
     |> case do
-      %{errors: []} ->
+      %State{errors: []} ->
         :ok
 
-      %{errors: errors} ->
+      %State{errors: errors} ->
         Enum.each(errors, &error/1)
         {:error, errors}
     end
@@ -83,7 +94,7 @@ defmodule Mix.Tasks.Compile.Proto do
     %{opts | includes: [@includes | List.wrap(opts.includes)]}
   end
 
-  defp do_compile(%{errors: []} = s, srcs, opts) do
+  defp do_compile(%State{errors: []} = s, srcs, opts) do
     :ok = File.mkdir_p(opts.target)
 
     targets = Enum.reduce(srcs, [], &(targets(&1, opts) ++ &2))
@@ -123,7 +134,7 @@ defmodule Mix.Tasks.Compile.Proto do
 
     cmd = "protoc " <> Enum.join(args, " ")
 
-    if Mix.shell().cmd(cmd) == 0 do
+    if Mix.shell().cmd(cmd, s.env) == 0 do
       s
     else
       %{s | errors: s.errors ++ ["Compilation failed"]}
@@ -148,6 +159,12 @@ defmodule Mix.Tasks.Compile.Proto do
     Mix.shell().info([:bright, @task_name, :normal, " ", :red, msg])
   end
 
+  defp set_env(s) do
+    path = "PATH" |> System.get_env() |> String.split(":")
+    env = [{"PATH", Enum.join([Mix.path_for(:escripts) | path], ":")}]
+    %{s | env: env}
+  end
+
   defp check_exec(s, exec) do
     if System.find_executable(exec) do
       s
@@ -170,5 +187,20 @@ defmodule Mix.Tasks.Compile.Proto do
     else
       %{s | errors: ["Source file #{src} doesn't match '*.#{ext}'" | s.errors]}
     end
+  end
+
+  defp check_plugin_version(s, req) do
+    version = plugin_version(s)
+
+    if Version.match?(version, req) do
+      s
+    else
+      %{s | errors: ["#{@plugin} version mismatch. Required: #{req}. Actual: #{version}"]}
+    end
+  end
+
+  defp plugin_version(s) do
+    {out, 0} = System.cmd(@plugin, ["--version"], env: s.env)
+    out |> String.trim() |> Version.parse!()
   end
 end

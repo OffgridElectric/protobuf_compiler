@@ -15,7 +15,10 @@ defmodule CompileProto.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      env: [
+        plugin_version: ">= 0.9.0"
+      ]
     ]
   end
 
