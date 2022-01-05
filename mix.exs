@@ -24,8 +24,7 @@ defmodule CompileProto.MixProject do
 
   defp deps do
     [
-      {:ex_doc, ">= 0.0.0", runtime: false},
-      {:protobuf, github: "OffgridElectric/protobuf", override: true}
+      {:ex_doc, ">= 0.0.0", runtime: false}
     ]
   end
 end
