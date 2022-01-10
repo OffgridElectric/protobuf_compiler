@@ -5,7 +5,7 @@ defmodule CompileProto.MixProject do
 
   def project do
     [
-      app: :compile_proto,
+      app: :protobuf_compiler,
       version: @version,
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
@@ -15,14 +15,16 @@ defmodule CompileProto.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      env: [
+        plugin_version: "0.9.0"
+      ]
     ]
   end
 
   defp deps do
     [
-      {:ex_doc, ">= 0.0.0", runtime: false},
-      {:protobuf, github: "OffgridElectric/protobuf", override: true}
+      {:ex_doc, ">= 0.0.0", runtime: false}
     ]
   end
 end

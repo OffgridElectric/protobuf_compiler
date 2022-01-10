@@ -3,13 +3,12 @@
 Provides a mix task `mix compile.proto` for easier integration of `elixir-protobuf/protobuf`. 
 
 The task will:
-1. Fetch options, check each file exists, and has correct `proto` extension
-2. Automatically include elixir.proto and elixirpb.proto
-3. Check the `protoc` binary exists and is executable
-4. Check the `protoc-gen-elixir` plugin is available and executable
-5. Ensure the target directory exists
-6. Check if any of the sources are "stale"
-7. Compile each file replacing the basename `.proto` with `.pb.ex`
+1. Fetch options, gather `.proto` sources
+2. Check the `protoc` binary exists and is executable
+3. Check the `protoc-gen-elixir` plugin is available and executable
+4. Ensure the target directory exists
+5. Check if any of the sources are "stale"
+6. Compile each file replacing the basename `.proto` with `.pb.ex`
 
 ## Installation
 
@@ -19,7 +18,7 @@ by adding `compile_proto` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:compile_proto, "~> 0.1.0"}
+    {:protobuf_compiler, "~> 0.1.0"}
   ]
 end
 ```
@@ -27,7 +26,7 @@ end
 Protoc options can be set in the project:
 
 ```elixir
-defmodule Enphase.MixProject do
+defmodule MyProject.MixProject do
   use Mix.Project
 
   def project do
@@ -35,7 +34,7 @@ defmodule Enphase.MixProject do
       app: :my_project,
       ...
       protoc_opts: [
-        sources: Path.wildcard("lib/**/*.proto"),
+        paths: ["lib"],
         target: "lib/protobuf/",
         gen_descriptors: true 
       ]
@@ -59,9 +58,6 @@ will be generated as:
 defmodule Example do
   @moduledoc false
   use Protobuf, syntax: :proto2
-  @type t :: %__MODULE__{}
-
-  defstruct []
 end
 ```
 

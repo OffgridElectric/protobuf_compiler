@@ -20,17 +20,13 @@ defmodule CompileProtoTest do
 
   test "accepts options" do
     options = [
-      sources: ["test/test.proto"],
-      target: Path.expand("test/output"),
-      rpc: false,
+      paths: ["test"],
+      dest: Path.expand("test/output"),
       gen_descriptors: true
     ]
 
     result = Proto.run(options)
-    _ = Proto.clean(options)
-
-    # To test shell messages...
-    # assert_receive {:mix_shell, :info, [info]}
+    _ = Proto.clean()
 
     assert result == :ok
   end
