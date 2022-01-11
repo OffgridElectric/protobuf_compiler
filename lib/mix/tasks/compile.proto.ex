@@ -252,6 +252,8 @@ defmodule Mix.Tasks.Compile.Proto do
   defp elixir_out_opts({:package_prefix, prefix}, acc),
     do: ["package_prefix=#{prefix}" | acc]
 
+  defp elixir_out_opts({:transform_module, nil}, acc), do: acc
+
   defp elixir_out_opts({:transform_module, mod}, acc),
     do: ["transform_module=#{Module.concat([mod])}" | acc]
 
