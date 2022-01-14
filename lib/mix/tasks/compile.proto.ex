@@ -61,7 +61,7 @@ defmodule Mix.Tasks.Compile.Proto do
 
   defmodule State do
     @moduledoc false
-    defstruct errors: [], env: [], sources: [], opts: nil, manifest: nil, force: false
+    defstruct errors: [], env: [], sources: [], opts: nil, manifest: nil, force: false, version: nil
   end
 
   @shortdoc "Compiles .proto file into elixir files"
@@ -288,12 +288,15 @@ defmodule Mix.Tasks.Compile.Proto do
         install_plugin(s)
 
       path ->
-        req = Application.fetch_env!(:protobuf_compiler, :plugin_version)
+        req = version_req()
 
-        if match_plugin_version?(path, req) do
+        s = get_plugin_version(s, path)
+
+        if match_plugin_version?(s, req) do
           s
         else
-          install_plugin(s)
+          Mix.shell().info("Found plugin `#{@plugin}=#{s.version}` (config: #{req})")
+          s
         end
     end
   end
@@ -302,25 +305,27 @@ defmodule Mix.Tasks.Compile.Proto do
     escriptsdir = Mix.path_for(:escripts)
     path = "PATH" |> System.get_env() |> String.split(":")
     env = [{"PATH", Enum.join([escriptsdir | path], ":")}]
-    version = Application.fetch_env!(:protobuf_compiler, :plugin_version)
+    version = version_req()
 
     :ok = Mix.Task.run("escript.install hex protobuf #{version}")
     Mix.shell().info("[protoc] #{Path.join(escriptsdir, @plugin)} (= #{version})")
 
-    %{s | env: env}
+    %{s | env: env, version: version}
   end
 
-  defp match_plugin_version?(exec, req) do
-    case System.cmd(exec, ["--version"]) do
-      {out, 0} ->
-        Version.match?(String.trim(out), "~> #{req}")
-
-      {_, _} ->
-        false
+  defp get_plugin_version(s, path) do
+    case System.cmd(path, ["--version"]) do
+      {out, 0} -> %{s | version: String.trim(out)}
+      {_, _} -> s
     end
+  end
+
+  defp match_plugin_version?(%{version: nil}, _), do: false
+
+  defp match_plugin_version?(%{version: version}, req) do
+    Version.match?(version, "~> #{req}")
   rescue
-    _ ->
-      false
+    _ -> false
   end
 
   defp move(from, to) do
@@ -367,4 +372,6 @@ defmodule Mix.Tasks.Compile.Proto do
       {@manifest_vsn, data} -> data
     end
   end
+
+  defp version_req, do: Application.fetch_env!(:protobuf_compiler, :plugin_version)
 end
