@@ -289,8 +289,8 @@ defmodule Mix.Tasks.Compile.Proto do
 
       path ->
         req = Application.fetch_env!(:protobuf_compiler, :plugin_version)
+
         if match_plugin_version?(path, req) do
-          Mix.shell().info("[protoc] #{path} (~> #{req})")
           s
         else
           install_plugin(s)
@@ -304,7 +304,7 @@ defmodule Mix.Tasks.Compile.Proto do
     env = [{"PATH", Enum.join([escriptsdir | path], ":")}]
     version = Application.fetch_env!(:protobuf_compiler, :plugin_version)
 
-    :ok = Mix.Task.run("escript.install hex #{@plugin} #{version}")
+    :ok = Mix.Task.run("escript.install hex protobuf #{version}")
     Mix.shell().info("[protoc] #{Path.join(escriptsdir, @plugin)} (= #{version})")
 
     %{s | env: env}
