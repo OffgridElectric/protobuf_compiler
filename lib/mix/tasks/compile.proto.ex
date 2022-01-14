@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Compile.Proto do
   @doc false
   @impl true
   def run(_args) do
-    Application.ensure_loaded(:protobuf)
+    Application.ensure_loaded(:protobuf_compiler)
 
     %State{opts: get_options(), manifest: parse_manifest(manifest())}
     |> set_force()
