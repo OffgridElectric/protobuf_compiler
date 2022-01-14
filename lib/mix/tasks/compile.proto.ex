@@ -289,8 +289,8 @@ defmodule Mix.Tasks.Compile.Proto do
 
       path ->
         req = Application.fetch_env!(:protobuf_compiler, :plugin_version)
+
         if match_plugin_version?(path, req) do
-          Mix.shell().info("[protoc] #{path} (~> #{req})")
           s
         else
           install_plugin(s)
