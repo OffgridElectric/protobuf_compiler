@@ -352,7 +352,7 @@ defmodule Mix.Tasks.Compile.Proto do
     env = system_path_prepend(s.env, escriptsdir)
     version = version_req()
 
-    :ok = Mix.Task.run("escript.install hex protobuf #{version}")
+    true = Mix.Task.run("escript.install", ["--force", "hex", "protobuf", version])
     Mix.shell().info("[protoc] #{Path.join(escriptsdir, @plugin)} (= #{version})")
 
     %{s | env: env, version: version}
