@@ -75,15 +75,22 @@ end
 
 ## Plugin Version
 
-The version of the plugin used to generate the elixir modules can be changed via the config:
+There is a strict dependency between `protobuf` library version and plugin used
+for code generation.
+
+This compiler tries to install the best suited plugin version:
+* if `protobuf` is a dep in your application, plugin is built from sources; else
+* if `protoc-gen-elixir` is found in your `PATH`, it will be used (mostly
+  intended to developers); else
+* compiler uses `mix escript.install hex` to install prebuilt version of the
+  plugin.
+
+When not built from source, you can force a specific version of the plugin with
+the config:
 
 ```elixir
 config :protobuf_compiler, plugin_version: "0.8.0"
 ```
-
-If a version of the plugin is already installed on your system, it will use that plugin.
-If the plugin is not installed, it will install the version specified in the config.
-If no version is specified in config, it will install the latest by default.
 
 ## Documentation
 
