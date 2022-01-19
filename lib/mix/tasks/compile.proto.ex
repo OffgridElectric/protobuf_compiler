@@ -224,7 +224,7 @@ defmodule Mix.Tasks.Compile.Proto do
       |> Enum.reduce([], &elixir_out_opts/2)
       |> case do
         [] ->
-          s.opts.target
+          tmpdir
 
         out_opts ->
           Enum.join(out_opts, ",") <> ":" <> tmpdir
@@ -237,7 +237,7 @@ defmodule Mix.Tasks.Compile.Proto do
       |> Kernel.++(s.opts.includes)
 
     []
-    |> Kernel.++(Enum.map(includes, &"-I #{&1}"))
+    |> Kernel.++(Enum.map(includes, &"-I#{&1}"))
     |> Kernel.++(["--elixir_out=" <> elixir_out_opts])
     |> Kernel.++(sources)
   end
@@ -260,6 +260,8 @@ defmodule Mix.Tasks.Compile.Proto do
     targets
   end
 
+  defp elixir_out_opts({:plugins, []}, acc), do: acc
+
   defp elixir_out_opts({:plugins, plugins}, acc),
     do: ["plugins=#{Enum.join(plugins, "+")}" | acc]
 
@@ -274,7 +276,7 @@ defmodule Mix.Tasks.Compile.Proto do
   defp elixir_out_opts({:transform_module, nil}, acc), do: acc
 
   defp elixir_out_opts({:transform_module, mod}, acc),
-    do: ["transform_module=#{Module.concat([mod])}" | acc]
+    do: ["transform_module=#{mod}" | acc]
 
   defp elixir_out_opts({:one_file_per_module, true}, acc),
     do: ["one_file_per_module=true" | acc]
