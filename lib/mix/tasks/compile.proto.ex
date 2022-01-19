@@ -300,34 +300,77 @@ defmodule Mix.Tasks.Compile.Proto do
   end
 
   defp ensure_plugin(s) do
-    case System.find_executable(@plugin) do
-      nil ->
-        install_plugin(s)
+    if protobuf_is_dep?() do
+      ensure_build_plugin(s)
+    else
+      case System.find_executable(@plugin) do
+        nil ->
+          install_plugin(s)
 
-      path ->
-        req = version_req()
+        path ->
+          req = version_req()
+          s = get_plugin_version(s, path)
 
-        s = get_plugin_version(s, path)
-
-        if match_plugin_version?(s, req) do
-          s
-        else
-          Mix.shell().info("Found plugin `#{@plugin}=#{s.version}` (config: #{req})")
-          s
-        end
+          if match_plugin_version?(s, req) do
+            s
+          else
+            Mix.shell().info("Found plugin `#{@plugin}=#{s.version}` (config: #{req})")
+            s
+          end
+      end
     end
+  end
+
+  defp protobuf_is_dep?, do: Map.has_key?(Mix.Project.deps_paths(), :protobuf)
+
+  defp ensure_build_plugin(s) do
+    builddir = Path.join(Mix.Project.build_path(), "lib/protobuf")
+    buildpath = Path.join(builddir, @plugin)
+
+    if Mix.Utils.stale?([Mix.Project.config()[:lockfile]], [buildpath]) do
+      build_plugin(s, builddir)
+    else
+      %{s | env: system_path_prepend(s.env, builddir)}
+    end
+  end
+
+  defp build_plugin(s, destdir) do
+    srcdir = Mix.Project.deps_paths()[:protobuf]
+    Mix.Project.in_project(:protobuf, srcdir, fn _project ->
+      with_env(:prod, fn -> Mix.Task.run("escript.build") end)
+    end)
+
+    destpath = Path.join(destdir, @plugin)
+    move(Path.join(srcdir, @plugin), destpath)
+    Mix.shell().info("[protoc] #{destpath} (from dep)")
+
+    %{s | env: system_path_prepend(s.env, destdir)}
   end
 
   defp install_plugin(s) do
     escriptsdir = Mix.path_for(:escripts)
-    path = "PATH" |> System.get_env() |> String.split(":")
-    env = [{"PATH", Enum.join([escriptsdir | path], ":")}]
+    env = system_path_prepend(s.env, escriptsdir)
     version = version_req()
 
     :ok = Mix.Task.run("escript.install hex protobuf #{version}")
     Mix.shell().info("[protoc] #{Path.join(escriptsdir, @plugin)} (= #{version})")
 
     %{s | env: env, version: version}
+  end
+
+  defp system_path_prepend(env, dir) do
+    path = List.keyfind(env, "PATH", 0, String.split(System.get_env("PATH", ""), ":"))
+    List.keystore(env, "PATH", 0, {"PATH", Enum.join([dir | path], ":")})
+  end
+
+  defp with_env(env, fun) do
+    orig = Mix.env()
+    try do
+      Mix.env(env)
+      fun.()
+    after
+      Mix.env(orig)
+    end
   end
 
   defp get_plugin_version(s, path) do
