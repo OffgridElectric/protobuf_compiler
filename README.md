@@ -36,7 +36,7 @@ defmodule MyProject.MixProject do
       ...
       protoc_opts: [
         paths: ["lib"],
-        target: "lib/protobuf/",
+        dest: "lib/protobuf/",
         gen_descriptors: true 
       ]
     ]
