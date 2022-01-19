@@ -30,4 +30,13 @@ defmodule CompileProtoTest do
 
     assert result == :ok
   end
+
+  describe ".do_protoc_args/3" do
+    test "destdir" do
+      s = %Proto.State{opts: %Proto.Options{}}
+      args = Proto.do_protoc_args(s, [], "/destdir")
+
+      assert ["--elixir_out=/destdir"] == args
+    end
+  end
 end

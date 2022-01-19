@@ -61,7 +61,18 @@ defmodule Mix.Tasks.Compile.Proto do
 
   defmodule State do
     @moduledoc false
-    defstruct errors: [], env: [], sources: [], opts: nil, manifest: nil, force: false, version: nil
+    defstruct errors: [],
+              env: [],
+              sources: [],
+              opts: nil,
+              manifest: nil,
+              force: false,
+              version: nil
+  end
+
+  defmodule Manifest do
+    @moduledoc false
+    defstruct sources: [], targets: []
   end
 
   @shortdoc "Compiles .proto file into elixir files"
@@ -70,7 +81,7 @@ defmodule Mix.Tasks.Compile.Proto do
 
   @plugin "protoc-gen-elixir"
   @manifest "compile.proto.manifest"
-  @manifest_vsn 1
+  @manifest_vsn 2
 
   use Mix.Task.Compiler
 
@@ -110,11 +121,11 @@ defmodule Mix.Tasks.Compile.Proto do
   ###
   ### Priv
   ###
-  defp do_clean(s) do
-    s.manifest
-    |> Enum.each(fn {_src, targets} ->
-      _ = info(Enum.join(targets, " "), "compile.clean")
-      Enum.each(targets, &File.rm/1)
+  defp do_clean(%State{manifest: %Manifest{targets: targets}}) do
+    targets
+    |> Enum.each(fn target ->
+      _ = info(target, "compile.clean")
+      File.rm(target)
     end)
   end
 
@@ -126,15 +137,12 @@ defmodule Mix.Tasks.Compile.Proto do
       do_clean(s)
     end
 
-    srcs
-    |> Enum.reduce(s, fn src, acc ->
-      if Mix.Utils.stale?([src], targets(src, s)) do
-        tmpdir = Path.join(Mix.Project.manifest_path(), "#{:erlang.phash2(make_ref())}")
-        do_protoc(acc, src, tmpdir)
-      else
-        acc
-      end
-    end)
+    if Mix.Utils.stale?(srcs, targets(srcs, s)) do
+      tmpdir = Path.join(Mix.Project.manifest_path(), "#{:erlang.phash2(make_ref())}")
+      do_protoc(s, srcs, tmpdir)
+    else
+      s
+    end
     |> write_manifest(timestamp)
   end
 
@@ -183,11 +191,33 @@ defmodule Mix.Tasks.Compile.Proto do
     %{s | force: force}
   end
 
-  defp do_protoc(s, src, tmpdir) do
-    _ = info(src)
+  defp do_protoc(s, sources, tmpdir) do
+    _ = info(Enum.join(sources, " "))
 
     :ok = File.mkdir_p!(tmpdir)
+    args = do_protoc_args(s, sources, tmpdir)
+    cmd = "protoc " <> Enum.join(args, " ")
 
+    if Mix.shell().cmd(cmd, env: s.env) == 0 do
+      targets =
+        tmpdir
+        |> Path.join("**/*.pb.ex")
+        |> Path.wildcard()
+        |> Enum.map(&Path.relative_to(&1, tmpdir))
+
+      s
+      |> move_to_destdir(tmpdir, targets)
+      |> update_manifest(sources, targets)
+    else
+      %{s | errors: s.errors ++ ["Compilation failed"]}
+    end
+  after
+    File.rm_rf(tmpdir)
+  end
+
+  # For testing purpose
+  @doc false
+  def do_protoc_args(s, sources, tmpdir) do
     elixir_out_opts =
       s.opts
       |> Map.from_struct()
@@ -200,31 +230,16 @@ defmodule Mix.Tasks.Compile.Proto do
           Enum.join(out_opts, ",") <> ":" <> tmpdir
       end
 
-    includes = [Path.dirname(src) | s.opts.includes]
+    includes =
+      sources
+      |> Enum.reduce(MapSet.new(), &MapSet.put(&2, Path.dirname(&1)))
+      |> MapSet.to_list()
+      |> Kernel.++(s.opts.includes)
 
-    args =
-      []
-      |> Kernel.++(Enum.map(includes, &"-I #{&1}"))
-      |> Kernel.++(["--elixir_out=" <> elixir_out_opts])
-      |> Kernel.++([src])
-
-    cmd = "protoc " <> Enum.join(args, " ")
-
-    if Mix.shell().cmd(cmd, env: s.env) == 0 do
-      targets =
-        tmpdir
-        |> Path.join("**/*.pb.ex")
-        |> Path.wildcard()
-        |> Enum.map(&Path.relative_to(&1, tmpdir))
-
-      s
-      |> move_to_destdir(tmpdir, targets)
-      |> update_manifest(src, targets)
-    else
-      %{s | errors: s.errors ++ ["Compilation failed"]}
-    end
-  after
-    File.rm_rf(tmpdir)
+    []
+    |> Kernel.++(Enum.map(includes, &"-I #{&1}"))
+    |> Kernel.++(["--elixir_out=" <> elixir_out_opts])
+    |> Kernel.++(sources)
   end
 
   defp move_to_destdir(s, tmpdir, targets) do
@@ -236,9 +251,13 @@ defmodule Mix.Tasks.Compile.Proto do
     s
   end
 
-  defp update_manifest(s, src, targets) do
-    manifest = Map.put(s.manifest, src, Enum.map(targets, &Path.join(s.opts.dest, &1)))
+  defp update_manifest(s, sources, targets) do
+    manifest = %Manifest{sources: sources, targets: targets}
     %{s | manifest: manifest}
+  end
+
+  defp targets(_sources, %{manifest: %{targets: targets}}) do
+    targets
   end
 
   defp elixir_out_opts({:plugins, plugins}, acc),
@@ -261,10 +280,6 @@ defmodule Mix.Tasks.Compile.Proto do
     do: ["one_file_per_module=true" | acc]
 
   defp elixir_out_opts(_, acc), do: acc
-
-  defp targets(src, %{manifest: manifest}) do
-    Map.get(manifest, src, [])
-  end
 
   defp info(msg, task_name \\ @task_name) do
     Mix.shell().info([:bright, task_name, :normal, " ", msg])
@@ -347,16 +362,18 @@ defmodule Mix.Tasks.Compile.Proto do
   end
 
   defp write_manifest(s, timestamp) do
-    if s.manifest == %{} do
-      File.rm(manifest())
-    else
-      path = manifest()
-      File.mkdir_p!(Path.dirname(path))
+    case s.manifest do
+      %Manifest{targets: []} ->
+        File.rm(manifest())
 
-      term = {@manifest_vsn, s.manifest}
-      manifest_data = :erlang.term_to_binary(term, [:compressed])
-      File.write!(path, manifest_data)
-      File.touch!(path, timestamp)
+      manifest ->
+        path = manifest()
+        File.mkdir_p!(Path.dirname(path))
+
+        term = {@manifest_vsn, manifest}
+        manifest_data = :erlang.term_to_binary(term, [:compressed])
+        File.write!(path, manifest_data)
+        File.touch!(path, timestamp)
     end
 
     s
@@ -367,9 +384,20 @@ defmodule Mix.Tasks.Compile.Proto do
       path |> File.read!() |> :erlang.binary_to_term()
     rescue
       _ ->
-        %{}
+        %Manifest{}
     else
-      {@manifest_vsn, data} -> data
+      {1, data} ->
+        targets =
+          data
+          |> Enum.reduce(MapSet.new(), fn {_source, targets}, acc ->
+            Enum.reduce(targets, acc, &MapSet.put(&2, &1))
+          end)
+          |> MapSet.to_list()
+
+        %Manifest{sources: Map.keys(data), targets: targets}
+
+      {@manifest_vsn, %Manifest{} = data} ->
+        data
     end
   end
 
