@@ -230,14 +230,8 @@ defmodule Mix.Tasks.Compile.Proto do
           Enum.join(out_opts, ",") <> ":" <> tmpdir
       end
 
-    includes =
-      sources
-      |> Enum.reduce(MapSet.new(), &MapSet.put(&2, Path.dirname(&1)))
-      |> MapSet.to_list()
-      |> Kernel.++(s.opts.includes)
-
     []
-    |> Kernel.++(Enum.map(includes, &"-I#{&1}"))
+    |> Kernel.++(Enum.map(s.opts.includes, &"-I#{&1}"))
     |> Kernel.++(["--elixir_out=" <> elixir_out_opts])
     |> Kernel.++(sources)
   end
