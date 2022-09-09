@@ -129,6 +129,8 @@ defmodule Mix.Tasks.Compile.Proto do
     end)
   end
 
+  defp do_compile(%State{sources: []} = s), do: s
+
   defp do_compile(%State{errors: [], sources: srcs, opts: opts} = s) do
     timestamp = System.os_time(:second)
     :ok = File.mkdir_p(opts.dest)
